@@ -56,6 +56,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_audioThread, &QThread::finished, m_worker, &QObject::deleteLater);
 
     connect(m_refreshButton, &QPushButton::clicked, this, &MainWindow::requestRefresh);
+    connect(m_deviceCombo, &QComboBox::currentIndexChanged, this, &MainWindow::requestDeviceSelection);
     connect(m_recordButton, &QPushButton::clicked, this, &MainWindow::requestStartRecording);
     connect(m_stopButton, &QPushButton::clicked, this, &MainWindow::requestStopRecording);
 
@@ -97,6 +98,16 @@ void MainWindow::requestStartRecording()
         Qt::QueuedConnection);
 }
 
+void MainWindow::requestDeviceSelection(int deviceIndex)
+{
+    QMetaObject::invokeMethod(
+        m_worker,
+        [worker = m_worker, deviceIndex]() {
+            worker->selectDevice(deviceIndex);
+        },
+        Qt::QueuedConnection);
+}
+
 void MainWindow::requestStopRecording()
 {
     setStatusText(QStringLiteral("Stopping capture..."));
@@ -105,16 +116,29 @@ void MainWindow::requestStopRecording()
 
 void MainWindow::onDevicesReady(const QStringList& deviceNames, int defaultIndex)
 {
+    m_deviceCombo->blockSignals(true);
     m_deviceCombo->clear();
     m_deviceCombo->addItems(deviceNames);
 
     if (defaultIndex >= 0 && defaultIndex < m_deviceCombo->count()) {
         m_deviceCombo->setCurrentIndex(defaultIndex);
+    } else if (m_deviceCombo->count() > 0) {
+        m_deviceCombo->setCurrentIndex(0);
     }
+    m_deviceCombo->blockSignals(false);
+
+    m_recordButton->setEnabled(m_deviceCombo->count() > 0);
+    m_stopButton->setEnabled(false);
+    m_deviceCombo->setEnabled(true);
+    m_refreshButton->setEnabled(true);
 
     setStatusText(deviceNames.isEmpty()
                       ? QStringLiteral("No playback devices were found.")
-                      : QStringLiteral("Select an output device and press Record."));
+                      : QStringLiteral("Monitoring selected output device. Press Record to save audio."));
+
+    if (m_deviceCombo->count() > 0) {
+        requestDeviceSelection(m_deviceCombo->currentIndex());
+    }
 }
 
 void MainWindow::onRecordingStateChanged(bool isRecording)

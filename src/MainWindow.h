@@ -22,6 +22,7 @@ public:
 
 private slots:
     void requestRefresh();
+    void requestDeviceSelection(int deviceIndex);
     void requestStartRecording();
     void requestStopRecording();
     void onDevicesReady(const QStringList& deviceNames, int defaultIndex);

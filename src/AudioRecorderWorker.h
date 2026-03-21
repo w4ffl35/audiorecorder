@@ -18,6 +18,7 @@ public:
 public slots:
     void initialize();
     void refreshDevices();
+    void selectDevice(int deviceIndex);
     void startRecording(int deviceIndex);
     void stopRecording();
     void saveRecording(const QString& filePath);
@@ -36,6 +37,7 @@ private slots:
 
 private:
     bool ensureContext();
+    bool startMonitoringDevice(int deviceIndex);
     void uninitializeContext();
     void publishPeak(float linearPeak);
     void shutdownDevice();

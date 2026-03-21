@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <vector>
 
@@ -39,9 +40,77 @@ QString backendErrorMessage(const char* action, ma_result result)
 struct DeviceEntry
 {
     QString name;
+    ma_device_id playbackId;
+#if defined(__linux__)
+    ma_device_id captureId;
+    QString monitorName;
+    bool hasMonitor = false;
+#endif
+    bool isDefault = false;
+};
+
+#if defined(__linux__)
+struct CaptureEntry
+{
+    QString name;
     ma_device_id id;
     bool isDefault = false;
 };
+
+QString normalizedName(QString text)
+{
+    text = text.toLower();
+    text.remove(QStringLiteral("monitor of "));
+    text.remove(QStringLiteral(".monitor"));
+    text.remove(QStringLiteral(" monitor"));
+    text.remove(QStringLiteral("default"));
+
+    QString normalized;
+    normalized.reserve(text.size());
+    for (const QChar ch : text) {
+        if (ch.isLetterOrNumber()) {
+            normalized.append(ch);
+        }
+    }
+
+    return normalized;
+}
+
+bool isMonitorDeviceName(const QString& name)
+{
+    const QString lower = name.toLower();
+    return lower.contains(QStringLiteral("monitor"));
+}
+
+int computeMonitorMatchScore(const QString& playbackName, const CaptureEntry& capture)
+{
+    if (!isMonitorDeviceName(capture.name)) {
+        return std::numeric_limits<int>::min();
+    }
+
+    const QString playbackNorm = normalizedName(playbackName);
+    const QString captureNorm = normalizedName(capture.name);
+    int score = 0;
+
+    if (!playbackNorm.isEmpty() && captureNorm == playbackNorm) {
+        score += 200;
+    }
+
+    if (!playbackNorm.isEmpty() && captureNorm.contains(playbackNorm)) {
+        score += 120;
+    }
+
+    if (!playbackName.isEmpty() && capture.name.contains(playbackName, Qt::CaseInsensitive)) {
+        score += 80;
+    }
+
+    if (capture.isDefault) {
+        score += 10;
+    }
+
+    return score;
+}
+#endif
 
 } 
 
@@ -57,6 +126,7 @@ public:
     bool contextReady = false;
     bool deviceReady = false;
     bool recording = false;
+    int currentDeviceIndex = -1;
     quint32 sampleRate = kCaptureSampleRate;
     quint16 channelCount = kCaptureChannels;
 };
@@ -147,11 +217,40 @@ void AudioRecorderWorker::refreshDevices()
     QStringList names;
     int defaultIndex = -1;
 
+#if defined(__linux__)
+    QVector<CaptureEntry> captureEntries;
+    captureEntries.reserve(static_cast<qsizetype>(captureCount));
+    for (ma_uint32 i = 0; i < captureCount; ++i) {
+        CaptureEntry entry;
+        entry.name = QString::fromUtf8(captureDevices[i].name);
+        entry.id = captureDevices[i].id;
+        entry.isDefault = captureDevices[i].isDefault == MA_TRUE;
+        captureEntries.push_back(entry);
+    }
+#endif
+
     for (ma_uint32 i = 0; i < playbackCount; ++i) {
         DeviceEntry entry;
         entry.name = QString::fromUtf8(playbackDevices[i].name);
-        entry.id = playbackDevices[i].id;
+        entry.playbackId = playbackDevices[i].id;
         entry.isDefault = playbackDevices[i].isDefault == MA_TRUE;
+
+#if defined(__linux__)
+        int bestScore = std::numeric_limits<int>::min();
+        for (const auto& captureEntry : captureEntries) {
+            const int score = computeMonitorMatchScore(entry.name, captureEntry);
+            if (score > bestScore) {
+                bestScore = score;
+                entry.captureId = captureEntry.id;
+                entry.monitorName = captureEntry.name;
+                entry.hasMonitor = true;
+            }
+        }
+
+        if (!entry.hasMonitor || bestScore < 0) {
+            continue;
+        }
+#endif
 
         if (entry.isDefault && defaultIndex < 0) {
             defaultIndex = names.size();
@@ -161,30 +260,63 @@ void AudioRecorderWorker::refreshDevices()
         names.push_back(entry.isDefault ? QStringLiteral("%1 (Default)").arg(entry.name) : entry.name);
     }
 
+#if defined(__linux__)
+    if (names.isEmpty()) {
+        emit errorOccurred(QStringLiteral("No PulseAudio/PipeWire monitor streams were found for the available playback devices."));
+    }
+#endif
+
     emit devicesReady(names, defaultIndex);
 }
 
-void AudioRecorderWorker::startRecording(int deviceIndex)
+void AudioRecorderWorker::selectDevice(int deviceIndex)
+{
+    if (deviceIndex < 0) {
+        shutdownDevice();
+        emit levelChanged(kMinDb);
+        return;
+    }
+
+    if (!startMonitoringDevice(deviceIndex)) {
+        emit levelChanged(kMinDb);
+    }
+}
+
+bool AudioRecorderWorker::startMonitoringDevice(int deviceIndex)
 {
     if (!ensureContext()) {
-        return;
+        return false;
     }
 
     if (deviceIndex < 0 || deviceIndex >= m_privateState->devices.size()) {
-        emit errorOccurred(QStringLiteral("Select a valid playback device before recording."));
-        return;
+        emit errorOccurred(QStringLiteral("Select a valid playback device."));
+        return false;
+    }
+
+    if (m_privateState->deviceReady && m_privateState->currentDeviceIndex == deviceIndex) {
+        return true;
     }
 
     shutdownDevice();
-
-    {
-        std::scoped_lock lock(m_privateState->bufferMutex);
-        m_privateState->capturedSamples.clear();
-    }
     m_privateState->peakLinear.store(0.0f, std::memory_order_relaxed);
 
+    const auto& selectedDevice = m_privateState->devices[deviceIndex];
+
+#if defined(_WIN32)
     ma_device_config deviceConfig = ma_device_config_init(ma_device_type_loopback);
-    deviceConfig.capture.pDeviceID = &m_privateState->devices[deviceIndex].id;
+    deviceConfig.capture.pDeviceID = &selectedDevice.playbackId;
+#elif defined(__linux__)
+    if (!selectedDevice.hasMonitor) {
+        emit errorOccurred(QStringLiteral("The selected playback device does not expose a monitor stream."));
+        return false;
+    }
+
+    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_capture);
+    deviceConfig.capture.pDeviceID = &selectedDevice.captureId;
+#else
+    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_capture);
+    deviceConfig.capture.pDeviceID = &selectedDevice.playbackId;
+#endif
     deviceConfig.capture.format = kCaptureFormat;
     deviceConfig.capture.channels = kCaptureChannels;
     deviceConfig.capture.shareMode = ma_share_mode_shared;
@@ -193,7 +325,7 @@ void AudioRecorderWorker::startRecording(int deviceIndex)
         Q_UNUSED(output);
 
         auto* worker = static_cast<AudioRecorderWorker*>(device->pUserData);
-        if (worker == nullptr || input == nullptr || !worker->m_privateState->recording) {
+        if (worker == nullptr || input == nullptr) {
             return;
         }
 
@@ -207,7 +339,7 @@ void AudioRecorderWorker::startRecording(int deviceIndex)
             peakSample = std::max(peakSample, magnitude);
         }
 
-        {
+        if (worker->m_privateState->recording) {
             std::scoped_lock lock(worker->m_privateState->bufferMutex);
             worker->m_privateState->capturedSamples.insert(
                 worker->m_privateState->capturedSamples.end(),
@@ -221,21 +353,38 @@ void AudioRecorderWorker::startRecording(int deviceIndex)
 
     const ma_result initResult = ma_device_init(&m_privateState->context, &deviceConfig, &m_privateState->device);
     if (initResult != MA_SUCCESS) {
-        emit errorOccurred(backendErrorMessage("Failed to initialize loopback capture", initResult));
-        return;
+        m_privateState->currentDeviceIndex = -1;
+        emit errorOccurred(backendErrorMessage("Failed to initialize speaker capture", initResult));
+        return false;
     }
 
     m_privateState->deviceReady = true;
+    m_privateState->currentDeviceIndex = deviceIndex;
     m_privateState->sampleRate = m_privateState->device.sampleRate;
     m_privateState->channelCount = static_cast<quint16>(m_privateState->device.capture.channels);
-    m_privateState->recording = true;
 
     const ma_result startResult = ma_device_start(&m_privateState->device);
     if (startResult != MA_SUCCESS) {
         shutdownDevice();
-        emit errorOccurred(backendErrorMessage("Failed to start loopback capture", startResult));
+        emit errorOccurred(backendErrorMessage("Failed to start speaker capture", startResult));
+        return false;
+    }
+
+    return true;
+}
+
+void AudioRecorderWorker::startRecording(int deviceIndex)
+{
+    if (!startMonitoringDevice(deviceIndex)) {
         return;
     }
+
+    {
+        std::scoped_lock lock(m_privateState->bufferMutex);
+        m_privateState->capturedSamples.clear();
+    }
+    m_privateState->peakLinear.store(0.0f, std::memory_order_relaxed);
+    m_privateState->recording = true;
 
     emit recordingStateChanged(true);
 }
@@ -313,6 +462,7 @@ void AudioRecorderWorker::shutdownDevice()
 {
     if (!m_privateState->deviceReady) {
         m_privateState->recording = false;
+        m_privateState->currentDeviceIndex = -1;
         emit recordingStateChanged(false);
         return;
     }
@@ -320,5 +470,6 @@ void AudioRecorderWorker::shutdownDevice()
     m_privateState->recording = false;
     ma_device_uninit(&m_privateState->device);
     m_privateState->deviceReady = false;
+    m_privateState->currentDeviceIndex = -1;
     emit recordingStateChanged(false);
 }

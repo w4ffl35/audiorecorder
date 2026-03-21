@@ -26,3 +26,4 @@ cmake --build build
 - The device picker shows playback devices only.
 - Record writes captured samples to memory immediately.
 - Stop ends capture and prompts for a `.wav` output path.# audiorecorder
+# audiorecorder

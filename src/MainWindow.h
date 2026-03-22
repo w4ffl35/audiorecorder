@@ -34,9 +34,8 @@ private:
     void stopAudioThread();
     void queueRefreshDevices();
     void queueSelectDevice(int deviceIndex);
-    void queueStartRecording(int deviceIndex);
+    void queueStartRecording(int deviceIndex, const QString& filePath);
     void queueStopRecording();
-    void queueSaveRecording(const QString& filePath);
     void queueDiscardRecording();
     void setStatusText(const QString& text);
     bool hasDevices() const;

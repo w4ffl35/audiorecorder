@@ -43,7 +43,7 @@ public:
     ma_context context{};
     ma_device device{};
     QVector<AudioRecorderWorkerDetail::DeviceEntry> devices;
-    std::vector<qint16> capturedSamples;
+    std::vector<qint16> pendingSamples;
     std::mutex bufferMutex;
     std::atomic<float> peakLinear = 0.0f;
     bool contextReady = false;

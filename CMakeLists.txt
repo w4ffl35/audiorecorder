@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(audiorecorder VERSION 1.0.0 LANGUAGES CXX)
+project(audiorecorder VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,6 +45,8 @@ qt_add_executable(audiorecorder
     src/WavWriter.cpp
     src/WavWriterPcm.h
     src/WavWriterPcm.cpp
+    src/WavWriterStream.h
+    src/WavWriterStream.cpp
     src/miniaudio_impl.cpp
     ${AUDIORECORDER_PLATFORM_SOURCE}
 )

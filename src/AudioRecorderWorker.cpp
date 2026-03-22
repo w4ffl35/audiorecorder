@@ -2,7 +2,7 @@
 #include "AudioRecorderWorkerConfig.h"
 #include "AudioRecorderWorkerPlatform.h"
 #include "AudioRecorderWorkerState.h"
-#include "WavWriter.h"
+#include "WavWriterStream.h"
 #include <QTimer>
 #include <algorithm>
 #include <array>
@@ -64,8 +64,8 @@ void captureCallback(ma_device* device, void* output, const void* input, ma_uint
 
     if (state->recording) {
         std::scoped_lock lock(state->bufferMutex);
-        state->capturedSamples.insert(
-            state->capturedSamples.end(),
+        state->pendingSamples.insert(
+            state->pendingSamples.end(),
             inputSamples,
             inputSamples + sampleCount);
     }
@@ -79,6 +79,7 @@ AudioRecorderWorker::AudioRecorderWorker(QObject* parent)
     : QObject(parent)
     , m_levelTimer(new QTimer(this))
     , m_state(new AudioRecorderWorkerState)
+    , m_writer(std::make_unique<WavWriterDetail::WavWriterStream>())
 {
     m_levelTimer->setInterval(50);
     connect(m_levelTimer, &QTimer::timeout, this, &AudioRecorderWorker::publishLevel);
@@ -187,6 +188,23 @@ void AudioRecorderWorker::selectDevice(int deviceIndex)
     }
 }
 
+bool AudioRecorderWorker::flushPendingSamples(QString* errorMessage)
+{
+    std::vector<qint16> pendingSamples;
+    {
+        std::scoped_lock lock(m_state->bufferMutex);
+        pendingSamples.swap(m_state->pendingSamples);
+    }
+
+    if (pendingSamples.empty()) {
+        return true;
+    }
+
+    return m_writer->appendSamples(
+        std::span<const qint16>(pendingSamples.data(), pendingSamples.size()),
+        errorMessage);
+}
+
 bool AudioRecorderWorker::startMonitoringDevice(int deviceIndex)
 {
     if (!ensureContext()) {
@@ -235,15 +253,26 @@ bool AudioRecorderWorker::startMonitoringDevice(int deviceIndex)
     return true;
 }
 
-void AudioRecorderWorker::startRecording(int deviceIndex)
+void AudioRecorderWorker::startRecording(int deviceIndex, const QString& filePath)
 {
+    if (filePath.isEmpty()) {
+        emit errorOccurred(QStringLiteral("No output path was selected."));
+        return;
+    }
+
     if (!startMonitoringDevice(deviceIndex)) {
         return;
     }
 
     {
         std::scoped_lock lock(m_state->bufferMutex);
-        m_state->capturedSamples.clear();
+        m_state->pendingSamples.clear();
+    }
+
+    QString errorMessage;
+    if (!m_writer->open(filePath, m_state->sampleRate, m_state->channelCount, &errorMessage)) {
+        emit errorOccurred(QStringLiteral("Failed to open WAV file: %1").arg(errorMessage));
+        return;
     }
 
     m_state->peakLinear.store(0.0f, std::memory_order_relaxed);
@@ -253,43 +282,26 @@ void AudioRecorderWorker::startRecording(int deviceIndex)
 
 void AudioRecorderWorker::stopRecording()
 {
-    const bool hadAudio = [&]() {
-        std::scoped_lock lock(m_state->bufferMutex);
-        return !m_state->capturedSamples.empty();
-    }();
-
     shutdownDevice();
     emit levelChanged(AudioRecorderWorkerConfig::MinDb);
-    emit recordingStopped(hadAudio);
-}
-
-void AudioRecorderWorker::saveRecording(const QString& filePath)
-{
-    if (filePath.isEmpty()) {
-        emit errorOccurred(QStringLiteral("No output path was selected."));
-        return;
-    }
-
-    std::vector<qint16> samples;
-    {
-        std::scoped_lock lock(m_state->bufferMutex);
-        samples = m_state->capturedSamples;
-    }
-
-    if (samples.empty()) {
-        emit errorOccurred(QStringLiteral("There is no captured audio to save."));
-        return;
-    }
 
     QString errorMessage;
-    const auto sampleSpan = std::span<const qint16>(samples.data(), samples.size());
-    if (!WavWriter::writePcm16(
-            filePath,
-            sampleSpan,
-            m_state->sampleRate,
-            m_state->channelCount,
-            &errorMessage)) {
-        emit errorOccurred(QStringLiteral("Failed to save WAV file: %1").arg(errorMessage));
+    if (!flushPendingSamples(&errorMessage)) {
+        m_writer->discard();
+        emit errorOccurred(QStringLiteral("Failed to write WAV file: %1").arg(errorMessage));
+        return;
+    }
+
+    if (!m_writer->isOpen() || !m_writer->hasAudio()) {
+        m_writer->discard();
+        emit recordingStopped(false);
+        return;
+    }
+
+    const QString filePath = m_writer->filePath();
+    if (!m_writer->finalize(&errorMessage)) {
+        m_writer->discard();
+        emit errorOccurred(QStringLiteral("Failed to finalize WAV file: %1").arg(errorMessage));
         return;
     }
 
@@ -298,12 +310,26 @@ void AudioRecorderWorker::saveRecording(const QString& filePath)
 
 void AudioRecorderWorker::discardRecording()
 {
-    std::scoped_lock lock(m_state->bufferMutex);
-    m_state->capturedSamples.clear();
+    {
+        std::scoped_lock lock(m_state->bufferMutex);
+        m_state->pendingSamples.clear();
+    }
+
+    m_state->recording = false;
+    m_writer->discard();
 }
 
 void AudioRecorderWorker::publishLevel()
 {
+    if (m_state->recording) {
+        QString errorMessage;
+        if (!flushPendingSamples(&errorMessage)) {
+            shutdownDevice();
+            m_writer->discard();
+            emit errorOccurred(QStringLiteral("Failed to write WAV file: %1").arg(errorMessage));
+        }
+    }
+
     const float peak = m_state->peakLinear.exchange(0.0f, std::memory_order_acq_rel);
     const float db = peak > AudioRecorderWorkerConfig::SilenceThreshold
         ? std::clamp(20.0f * std::log10(peak), AudioRecorderWorkerConfig::MinDb, 0.0f)

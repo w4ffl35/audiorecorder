@@ -29,7 +29,7 @@ QString emptyDeviceStatusText()
 
 QString readyStatusText()
 {
-    return QStringLiteral("Monitoring selected output device. Press Record to save audio.");
+    return QStringLiteral("Monitoring selected output device. Press Record to choose a WAV file and start recording.");
 }
 
 }

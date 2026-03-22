@@ -79,19 +79,19 @@ void MainWindow::queueSelectDevice(int deviceIndex)
     QMetaObject::invokeMethod(m_worker, "selectDevice", Qt::QueuedConnection, Q_ARG(int, deviceIndex));
 }
 
-void MainWindow::queueStartRecording(int deviceIndex)
+void MainWindow::queueStartRecording(int deviceIndex, const QString& filePath)
 {
-    QMetaObject::invokeMethod(m_worker, "startRecording", Qt::QueuedConnection, Q_ARG(int, deviceIndex));
+    QMetaObject::invokeMethod(
+        m_worker,
+        "startRecording",
+        Qt::QueuedConnection,
+        Q_ARG(int, deviceIndex),
+        Q_ARG(QString, filePath));
 }
 
 void MainWindow::queueStopRecording()
 {
     QMetaObject::invokeMethod(m_worker, &AudioRecorderWorker::stopRecording, Qt::QueuedConnection);
-}
-
-void MainWindow::queueSaveRecording(const QString& filePath)
-{
-    QMetaObject::invokeMethod(m_worker, "saveRecording", Qt::QueuedConnection, Q_ARG(QString, filePath));
 }
 
 void MainWindow::queueDiscardRecording()
@@ -107,8 +107,14 @@ void MainWindow::requestRefresh()
 
 void MainWindow::requestStartRecording()
 {
-    setStatusText(QStringLiteral("Starting loopback capture..."));
-    queueStartRecording(m_ui->currentDeviceIndex());
+    const QString filePath = m_ui->requestSaveFilePath(this);
+    if (filePath.isEmpty()) {
+        setStatusText(QStringLiteral("Recording canceled."));
+        return;
+    }
+
+    setStatusText(QStringLiteral("Recording speaker output to %1").arg(filePath));
+    queueStartRecording(m_ui->currentDeviceIndex(), filePath);
 }
 
 void MainWindow::requestDeviceSelection(int deviceIndex)
@@ -136,7 +142,7 @@ void MainWindow::onRecordingStateChanged(bool isRecording)
     m_ui->setRecordingState(isRecording, hasDevices());
 
     if (isRecording) {
-        setStatusText(QStringLiteral("Recording speaker output to memory..."));
+        return;
     }
 }
 
@@ -144,18 +150,7 @@ void MainWindow::onRecordingStopped(bool hasAudio)
 {
     if (!hasAudio) {
         setStatusText(QStringLiteral("Recording stopped. No audio was captured."));
-        return;
     }
-
-    const QString filePath = m_ui->requestSaveFilePath(this);
-    if (filePath.isEmpty()) {
-        queueDiscardRecording();
-        setStatusText(QStringLiteral("Recording discarded."));
-        return;
-    }
-
-    setStatusText(QStringLiteral("Saving WAV file..."));
-    queueSaveRecording(filePath);
 }
 
 void MainWindow::onRecordingSaved(const QString& filePath)

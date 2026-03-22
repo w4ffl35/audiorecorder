@@ -3,9 +3,13 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <memory>
 
 class AudioRecorderWorkerState;
 class QTimer;
+namespace WavWriterDetail {
+class WavWriterStream;
+}
 
 class AudioRecorderWorker : public QObject
 {
@@ -19,9 +23,8 @@ public slots:
     void initialize();
     void refreshDevices();
     void selectDevice(int deviceIndex);
-    void startRecording(int deviceIndex);
+    void startRecording(int deviceIndex, const QString& filePath);
     void stopRecording();
-    void saveRecording(const QString& filePath);
     void discardRecording();
 
 signals:
@@ -37,10 +40,12 @@ private slots:
 
 private:
     bool ensureContext();
+    bool flushPendingSamples(QString* errorMessage = nullptr);
     bool startMonitoringDevice(int deviceIndex);
     void uninitializeContext();
     void shutdownDevice();
 
     QTimer* m_levelTimer = nullptr;
     AudioRecorderWorkerState* m_state = nullptr;
+    std::unique_ptr<WavWriterDetail::WavWriterStream> m_writer;
 };

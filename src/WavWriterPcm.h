@@ -19,6 +19,8 @@ public:
         QString* errorMessage);
 
 private:
+    friend class WavWriterStream;
+
     static constexpr quint32 BytesPerSample = sizeof(qint16);
     static constexpr quint32 PcmFormatChunkSize = 16;
     static constexpr quint16 PcmFormatTag = 1;

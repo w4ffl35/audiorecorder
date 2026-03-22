@@ -4,15 +4,15 @@
 [![Release Build](https://github.com/w4ffl35/audiorecorder/actions/workflows/release.yml/badge.svg)](https://github.com/w4ffl35/audiorecorder/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/w4ffl35/audiorecorder)](https://github.com/w4ffl35/audiorecorder/blob/master/LICENSE.md)
 
-![alt text](image.png)
+![Application screenshot](image.png)
 
 Download prebuilt Linux and Windows binaries from [GitHub Releases](https://github.com/w4ffl35/audiorecorder/releases/latest).
 
-Qt 6 desktop application for recording system output to a 16-bit PCM WAV file.
+Qt 6 desktop application for recording and mixing multiple audio input and output sources into a 16-bit PCM WAV file.
 
 This code was generated with AI. I wanted a very simple audio recorder for a project and did not like the available options. Its ugly, but it works.
 
-Current release: `v1.1.0`
+Current release: `v1.2.0`
 
 ## Backends
 
@@ -41,13 +41,16 @@ cmake --build build
 
 ## Releases
 
-- Pushing a tag like `v1.1.0` triggers GitHub Actions to build release artifacts for Linux and Windows.
+- Pushing a tag like `v1.2.0` triggers GitHub Actions to build release artifacts for Linux and Windows.
 - GitHub Actions publishes the built archives to the matching GitHub release.
 
 ## Notes
 
-- The device picker shows playback devices only.
+- You can configure one or more audio sources at the same time, including output devices and microphones.
+- Each source has its own device selector, mute toggle, level meter, and gain slider.
+- A source can only be selected once across the active source list.
+- The bottom level meter shows the overall mixed signal.
 - Press Record to choose the destination `.wav` file before capture starts.
-- While recording, audio is streamed directly to the selected file with a small in-memory staging buffer.
+- While recording, audio from all unmuted sources is mixed and streamed directly to the selected file.
 - Stop ends capture, finalizes the WAV header, and closes the file.
 - If recording ends without captured audio, the incomplete output file is discarded.

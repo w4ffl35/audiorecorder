@@ -76,20 +76,12 @@ void MainWindow::queueRefreshDevices()
 
 void MainWindow::queueSelectDevice(int deviceIndex)
 {
-    QMetaObject::invokeMethod(
-        m_worker,
-        &AudioRecorderWorker::selectDevice,
-        Qt::QueuedConnection,
-        deviceIndex);
+    QMetaObject::invokeMethod(m_worker, "selectDevice", Qt::QueuedConnection, Q_ARG(int, deviceIndex));
 }
 
 void MainWindow::queueStartRecording(int deviceIndex)
 {
-    QMetaObject::invokeMethod(
-        m_worker,
-        &AudioRecorderWorker::startRecording,
-        Qt::QueuedConnection,
-        deviceIndex);
+    QMetaObject::invokeMethod(m_worker, "startRecording", Qt::QueuedConnection, Q_ARG(int, deviceIndex));
 }
 
 void MainWindow::queueStopRecording()
@@ -99,11 +91,7 @@ void MainWindow::queueStopRecording()
 
 void MainWindow::queueSaveRecording(const QString& filePath)
 {
-    QMetaObject::invokeMethod(
-        m_worker,
-        &AudioRecorderWorker::saveRecording,
-        Qt::QueuedConnection,
-        filePath);
+    QMetaObject::invokeMethod(m_worker, "saveRecording", Qt::QueuedConnection, Q_ARG(QString, filePath));
 }
 
 void MainWindow::queueDiscardRecording()

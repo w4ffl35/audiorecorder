@@ -4,7 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
-#include <QtTypes>
+#include <QtGlobal>
 #include <atomic>
 #include <mutex>
 #include <vector>

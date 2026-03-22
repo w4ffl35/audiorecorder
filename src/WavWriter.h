@@ -2,7 +2,7 @@
 
 #include <QString>
 #include <span>
-#include <QtTypes>
+#include <QtGlobal>
 
 namespace WavWriter
 {

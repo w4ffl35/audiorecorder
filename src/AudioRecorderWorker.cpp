@@ -57,11 +57,13 @@ void captureCallback(ma_device* device, void* output, const void* input, ma_uint
     const ma_uint32 channelCount = device->capture.channels;
     const auto sampleCount = static_cast<std::size_t>(frameCount) * channelCount;
     const auto* inputSamples = static_cast<const qint16*>(input);
+    const bool isMuted = source->muted.load(std::memory_order_acquire);
+    const float gainLinear = source->gainLinear.load(std::memory_order_acquire);
     const float peakLinear = static_cast<float>(peakSampleForBuffer(inputSamples, sampleCount)) /
         AudioRecorderWorkerConfig::PeakScale;
-    const float adjustedPeak = source->muted
+    const float adjustedPeak = isMuted
         ? 0.0f
-        : std::clamp(peakLinear * source->gainLinear, 0.0f, 1.0f);
+        : std::clamp(peakLinear * gainLinear, 0.0f, 1.0f);
 
     if (source->owner->recording) {
         std::scoped_lock lock(source->bufferMutex);
@@ -219,7 +221,7 @@ bool AudioRecorderWorker::flushPendingSamples(QString* errorMessage)
         std::scoped_lock lock(activeSource->bufferMutex);
         for (std::size_t sampleIndex = 0; sampleIndex < mixSampleCount; ++sampleIndex) {
             mixedSamples[sampleIndex] += static_cast<int>(
-                activeSource->pendingSamples[sampleIndex] * activeSource->gainLinear);
+                activeSource->pendingSamples[sampleIndex] * activeSource->gainLinear.load(std::memory_order_acquire));
         }
 
         for (std::size_t sampleIndex = 0; sampleIndex < mixSampleCount; ++sampleIndex) {
@@ -269,8 +271,10 @@ bool AudioRecorderWorker::startCaptureSources(
         auto activeSource = std::make_unique<ActiveCaptureSource>();
         activeSource->owner = m_state;
         activeSource->device = m_state->devices[deviceIndex];
-        activeSource->muted = mutedStates.value(sourceIndex, false);
-        activeSource->gainLinear = std::max(0, gainPercents.value(sourceIndex, 100)) / 100.0f;
+        activeSource->muted.store(mutedStates.value(sourceIndex, false), std::memory_order_release);
+        activeSource->gainLinear.store(
+            std::max(0, gainPercents.value(sourceIndex, 100)) / 100.0f,
+            std::memory_order_release);
 
         ma_device_config deviceConfig = AudioRecorderWorkerPlatform::createDeviceConfig(activeSource->device);
         deviceConfig.dataCallback = captureCallback;
@@ -328,8 +332,16 @@ bool AudioRecorderWorker::updateActiveSourceMix(
             return false;
         }
 
-        activeSource->muted = mutedStates.value(index, false);
-        activeSource->gainLinear = std::max(0, gainPercents.value(index, 100)) / 100.0f;
+        const bool shouldMute = mutedStates.value(index, false);
+        activeSource->muted.store(shouldMute, std::memory_order_release);
+        activeSource->gainLinear.store(
+            std::max(0, gainPercents.value(index, 100)) / 100.0f,
+            std::memory_order_release);
+
+        if (shouldMute) {
+            std::scoped_lock lock(activeSource->bufferMutex);
+            activeSource->pendingSamples.clear();
+        }
     }
 
     return true;

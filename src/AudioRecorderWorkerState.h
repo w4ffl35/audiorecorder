@@ -53,8 +53,8 @@ struct ActiveCaptureSource
     std::mutex bufferMutex;
     std::deque<qint16> pendingSamples;
     std::atomic<float> peakLinear = 0.0f;
-    float gainLinear = 1.0f;
-    bool muted = false;
+    std::atomic<float> gainLinear = 1.0f;
+    std::atomic<bool> muted = false;
     bool deviceReady = false;
 };
 

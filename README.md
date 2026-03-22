@@ -2,6 +2,8 @@
 
 Qt 6 desktop application for recording speaker or microphone output to a 16-bit PCM WAV file.
 
+This code was generated with AI. I wanted a very simple audio recorder for a project and did not like the available options. Its ugly, but it works.
+
 ## Backends
 
 - Windows: WASAPI loopback via miniaudio.

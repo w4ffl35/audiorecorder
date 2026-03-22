@@ -1,6 +1,6 @@
 # System Audio Recorder
 
-Qt 6 desktop application for recording speaker output to a 16-bit PCM WAV file.
+Qt 6 desktop application for recording speaker or microphone output to a 16-bit PCM WAV file.
 
 ## Backends
 

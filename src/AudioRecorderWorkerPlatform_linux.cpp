@@ -6,7 +6,17 @@ namespace {
 
 using AudioRecorderWorkerDetail::CaptureEntry;
 using AudioRecorderWorkerDetail::DeviceEntry;
+using AudioRecorderWorkerDetail::DeviceKind;
 using AudioRecorderWorkerDetail::EnumeratedDevices;
+
+QString displayName(const QString& name, DeviceKind kind, bool isDefault)
+{
+    const QString kindSuffix = kind == DeviceKind::Output
+        ? QStringLiteral("Output")
+        : QStringLiteral("Input");
+    const QString baseName = QStringLiteral("%1 (%2)").arg(name, kindSuffix);
+    return isDefault ? QStringLiteral("%1 (Default)").arg(baseName) : baseName;
+}
 
 QString normalizedName(QString text)
 {
@@ -101,7 +111,7 @@ bool assignMonitorCaptureDevice(
 
 namespace AudioRecorderWorkerPlatform {
 
-bool supportsSpeakerCapture()
+bool supportsAudioCapture()
 {
     return true;
 }
@@ -133,6 +143,7 @@ EnumeratedDevices enumerateDevices(
         DeviceEntry entry;
         entry.name = QString::fromUtf8(playbackDevices[index].name);
         entry.playbackId = playbackDevices[index].id;
+        entry.kind = DeviceKind::Output;
         entry.isDefault = playbackDevices[index].isDefault == MA_TRUE;
 
         if (!assignMonitorCaptureDevice(entry, captureEntries)) {
@@ -144,15 +155,30 @@ EnumeratedDevices enumerateDevices(
         }
 
         enumerated.devices.push_back(entry);
-        enumerated.names.push_back(
-            entry.isDefault
-                ? QStringLiteral("%1 (Default)").arg(entry.name)
-                : entry.name);
+        enumerated.names.push_back(displayName(entry.name, entry.kind, entry.isDefault));
+    }
+
+    for (const CaptureEntry& captureEntry : captureEntries) {
+        if (isMonitorDeviceName(captureEntry.name)) {
+            continue;
+        }
+
+        DeviceEntry entry;
+        entry.name = captureEntry.name;
+        entry.captureId = captureEntry.id;
+        entry.kind = DeviceKind::Input;
+        entry.isDefault = captureEntry.isDefault;
+
+        if (entry.isDefault && enumerated.defaultIndex < 0) {
+            enumerated.defaultIndex = enumerated.names.size();
+        }
+
+        enumerated.devices.push_back(entry);
+        enumerated.names.push_back(displayName(entry.name, entry.kind, entry.isDefault));
     }
 
     if (enumerated.names.isEmpty()) {
-        enumerated.emptyMessage = QStringLiteral(
-            "No PulseAudio/PipeWire monitor streams were found for the available playback devices.");
+        enumerated.emptyMessage = QStringLiteral("No audio input or output devices were found.");
     }
 
     return enumerated;

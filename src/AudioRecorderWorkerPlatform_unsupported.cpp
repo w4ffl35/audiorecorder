@@ -6,7 +6,7 @@ namespace AudioRecorderWorkerPlatform {
 using AudioRecorderWorkerDetail::DeviceEntry;
 using AudioRecorderWorkerDetail::EnumeratedDevices;
 
-bool supportsSpeakerCapture()
+bool supportsAudioCapture()
 {
     return false;
 }
@@ -39,7 +39,7 @@ EnumeratedDevices enumerateDevices(
 ma_device_config createDeviceConfig(const DeviceEntry& deviceEntry)
 {
     ma_device_config deviceConfig = ma_device_config_init(ma_device_type_capture);
-    deviceConfig.capture.pDeviceID = &deviceEntry.playbackId;
+    deviceConfig.capture.pDeviceID = &deviceEntry.captureId;
     deviceConfig.capture.format = AudioRecorderWorkerConfig::CaptureFormat;
     deviceConfig.capture.channels = AudioRecorderWorkerConfig::CaptureChannels;
     deviceConfig.capture.shareMode = ma_share_mode_shared;

@@ -6,17 +6,27 @@
 #include <QVector>
 #include <QtGlobal>
 #include <atomic>
+#include <deque>
+#include <memory>
 #include <mutex>
 #include <vector>
 #include <miniaudio.h>
 
+class AudioRecorderWorkerState;
+
 namespace AudioRecorderWorkerDetail {
+
+enum class DeviceKind {
+    Output,
+    Input,
+};
 
 struct DeviceEntry
 {
     QString name;
     ma_device_id playbackId{};
     ma_device_id captureId{};
+    DeviceKind kind = DeviceKind::Output;
     bool isDefault = false;
 };
 
@@ -35,21 +45,29 @@ struct EnumeratedDevices
     QString emptyMessage;
 };
 
+struct ActiveCaptureSource
+{
+    AudioRecorderWorkerState* owner = nullptr;
+    DeviceEntry device;
+    ma_device captureDevice{};
+    std::mutex bufferMutex;
+    std::deque<qint16> pendingSamples;
+    std::atomic<float> peakLinear = 0.0f;
+    float gainLinear = 1.0f;
+    bool muted = false;
+    bool deviceReady = false;
+};
+
 }
 
 class AudioRecorderWorkerState
 {
 public:
     ma_context context{};
-    ma_device device{};
     QVector<AudioRecorderWorkerDetail::DeviceEntry> devices;
-    std::vector<qint16> pendingSamples;
-    std::mutex bufferMutex;
-    std::atomic<float> peakLinear = 0.0f;
+    std::vector<std::unique_ptr<AudioRecorderWorkerDetail::ActiveCaptureSource>> activeSources;
     bool contextReady = false;
-    bool deviceReady = false;
     bool recording = false;
-    int currentDeviceIndex = -1;
     quint32 sampleRate = AudioRecorderWorkerConfig::CaptureSampleRate;
     quint16 channelCount = AudioRecorderWorkerConfig::CaptureChannels;
 };

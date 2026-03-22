@@ -7,7 +7,7 @@ namespace AudioRecorderWorkerPlatform {
 
 inline constexpr std::size_t SupportedBackendCapacity = 1;
 
-bool supportsSpeakerCapture();
+bool supportsAudioCapture();
 QString unsupportedPlatformMessage();
 ma_uint32 supportedBackends(
     std::array<ma_backend, SupportedBackendCapacity>& backends);

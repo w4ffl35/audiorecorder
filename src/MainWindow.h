@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QVector>
 #include <QString>
 #include <QStringList>
 #include <memory>
@@ -19,7 +20,6 @@ public:
 
 private slots:
     void requestRefresh();
-    void requestDeviceSelection(int deviceIndex);
     void requestStartRecording();
     void requestStopRecording();
     void onDevicesReady(const QStringList& deviceNames, int defaultIndex);
@@ -32,9 +32,12 @@ private:
     void connectSignals();
     void startAudioThread();
     void stopAudioThread();
+    void queueConfigureSources(
+        const QVector<int>& deviceIndices,
+        const QVector<bool>& mutedStates,
+        const QVector<int>& gainPercents);
     void queueRefreshDevices();
-    void queueSelectDevice(int deviceIndex);
-    void queueStartRecording(int deviceIndex, const QString& filePath);
+    void queueStartRecording(const QString& filePath);
     void queueStopRecording();
     void queueDiscardRecording();
     void setStatusText(const QString& text);

@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 #include <memory>
 
 class AudioRecorderWorkerState;
@@ -22,14 +23,18 @@ public:
 public slots:
     void initialize();
     void refreshDevices();
-    void selectDevice(int deviceIndex);
-    void startRecording(int deviceIndex, const QString& filePath);
+    void configureSources(
+        const QVector<int>& deviceIndices,
+        const QVector<bool>& mutedStates,
+        const QVector<int>& gainPercents);
+    void startRecording(const QString& filePath);
     void stopRecording();
     void discardRecording();
 
 signals:
     void devicesReady(const QStringList& deviceNames, int defaultIndex);
     void levelChanged(float levelDb);
+    void sourceLevelsChanged(const QVector<float>& sourceLevelsDb);
     void recordingStateChanged(bool isRecording);
     void recordingStopped(bool hasAudio);
     void recordingSaved(const QString& filePath);
@@ -41,9 +46,16 @@ private slots:
 private:
     bool ensureContext();
     bool flushPendingSamples(QString* errorMessage = nullptr);
-    bool startMonitoringDevice(int deviceIndex);
+    bool startCaptureSources(
+        const QVector<int>& deviceIndices,
+        const QVector<bool>& mutedStates,
+        const QVector<int>& gainPercents);
+    bool updateActiveSourceMix(
+        const QVector<int>& deviceIndices,
+        const QVector<bool>& mutedStates,
+        const QVector<int>& gainPercents);
     void uninitializeContext();
-    void shutdownDevice();
+    void shutdownDevices();
 
     QTimer* m_levelTimer = nullptr;
     AudioRecorderWorkerState* m_state = nullptr;

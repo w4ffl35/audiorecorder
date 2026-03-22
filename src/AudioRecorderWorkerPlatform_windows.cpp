@@ -4,9 +4,23 @@
 namespace AudioRecorderWorkerPlatform {
 
 using AudioRecorderWorkerDetail::DeviceEntry;
+using AudioRecorderWorkerDetail::DeviceKind;
 using AudioRecorderWorkerDetail::EnumeratedDevices;
 
-bool supportsSpeakerCapture()
+namespace {
+
+QString displayName(const QString& name, DeviceKind kind, bool isDefault)
+{
+    const QString kindSuffix = kind == DeviceKind::Output
+        ? QStringLiteral("Output")
+        : QStringLiteral("Input");
+    const QString baseName = QStringLiteral("%1 (%2)").arg(name, kindSuffix);
+    return isDefault ? QStringLiteral("%1 (Default)").arg(baseName) : baseName;
+}
+
+}
+
+bool supportsAudioCapture()
 {
     return true;
 }
@@ -37,7 +51,7 @@ EnumeratedDevices enumerateDevices(
         DeviceEntry entry;
         entry.name = QString::fromUtf8(playbackDevices[index].name);
         entry.playbackId = playbackDevices[index].id;
-        entry.captureId = playbackDevices[index].id;
+        entry.kind = DeviceKind::Output;
         entry.isDefault = playbackDevices[index].isDefault == MA_TRUE;
 
         if (entry.isDefault && enumerated.defaultIndex < 0) {
@@ -45,10 +59,22 @@ EnumeratedDevices enumerateDevices(
         }
 
         enumerated.devices.push_back(entry);
-        enumerated.names.push_back(
-            entry.isDefault
-                ? QStringLiteral("%1 (Default)").arg(entry.name)
-                : entry.name);
+        enumerated.names.push_back(displayName(entry.name, entry.kind, entry.isDefault));
+    }
+
+    for (ma_uint32 index = 0; index < captureCount; ++index) {
+        DeviceEntry entry;
+        entry.name = QString::fromUtf8(captureDevices[index].name);
+        entry.captureId = captureDevices[index].id;
+        entry.kind = DeviceKind::Input;
+        entry.isDefault = captureDevices[index].isDefault == MA_TRUE;
+
+        if (entry.isDefault && enumerated.defaultIndex < 0) {
+            enumerated.defaultIndex = enumerated.names.size();
+        }
+
+        enumerated.devices.push_back(entry);
+        enumerated.names.push_back(displayName(entry.name, entry.kind, entry.isDefault));
     }
 
     return enumerated;
@@ -56,8 +82,13 @@ EnumeratedDevices enumerateDevices(
 
 ma_device_config createDeviceConfig(const DeviceEntry& deviceEntry)
 {
-    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_loopback);
-    deviceConfig.capture.pDeviceID = &deviceEntry.playbackId;
+    const ma_device_type deviceType = deviceEntry.kind == DeviceKind::Output
+        ? ma_device_type_loopback
+        : ma_device_type_capture;
+    ma_device_config deviceConfig = ma_device_config_init(deviceType);
+    deviceConfig.capture.pDeviceID = deviceEntry.kind == DeviceKind::Output
+        ? &deviceEntry.playbackId
+        : &deviceEntry.captureId;
     deviceConfig.capture.format = AudioRecorderWorkerConfig::CaptureFormat;
     deviceConfig.capture.channels = AudioRecorderWorkerConfig::CaptureChannels;
     deviceConfig.capture.shareMode = ma_share_mode_shared;

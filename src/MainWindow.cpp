@@ -29,12 +29,14 @@ void MainWindow::connectSignals()
     m_worker->moveToThread(m_audioThread);
     connect(m_audioThread, &QThread::finished, m_worker, &QObject::deleteLater);
 
+    m_ui->setSourceConfigurationChangedCallback([this]() {
+        queueConfigureSources(
+            m_ui->selectedDeviceIndices(),
+            m_ui->mutedStates(),
+            m_ui->gainPercents());
+    });
+
     connect(m_ui->refreshButton, &QPushButton::clicked, this, &MainWindow::requestRefresh);
-    connect(
-        m_ui->deviceCombo,
-        &QComboBox::currentIndexChanged,
-        this,
-        &MainWindow::requestDeviceSelection);
     connect(m_ui->recordButton, &QPushButton::clicked, this, &MainWindow::requestStartRecording);
     connect(m_ui->stopButton, &QPushButton::clicked, this, &MainWindow::requestStopRecording);
 
@@ -44,6 +46,9 @@ void MainWindow::connectSignals()
         &AudioRecorderWorker::levelChanged,
         m_ui->levelMeter,
         &LevelMeterWidget::setLevelDb);
+    connect(m_worker, &AudioRecorderWorker::sourceLevelsChanged, this, [this](const QVector<float>& sourceLevelsDb) {
+        m_ui->setSourceLevels(sourceLevelsDb);
+    });
     connect(
         m_worker,
         &AudioRecorderWorker::recordingStateChanged,
@@ -69,24 +74,32 @@ void MainWindow::stopAudioThread()
     m_audioThread->wait();
 }
 
+void MainWindow::queueConfigureSources(
+    const QVector<int>& deviceIndices,
+    const QVector<bool>& mutedStates,
+    const QVector<int>& gainPercents)
+{
+    QMetaObject::invokeMethod(
+        m_worker,
+        [this, deviceIndices, mutedStates, gainPercents]() {
+            m_worker->configureSources(deviceIndices, mutedStates, gainPercents);
+        },
+        Qt::QueuedConnection);
+}
+
 void MainWindow::queueRefreshDevices()
 {
     QMetaObject::invokeMethod(m_worker, &AudioRecorderWorker::refreshDevices, Qt::QueuedConnection);
 }
 
-void MainWindow::queueSelectDevice(int deviceIndex)
-{
-    QMetaObject::invokeMethod(m_worker, "selectDevice", Qt::QueuedConnection, Q_ARG(int, deviceIndex));
-}
-
-void MainWindow::queueStartRecording(int deviceIndex, const QString& filePath)
+void MainWindow::queueStartRecording(const QString& filePath)
 {
     QMetaObject::invokeMethod(
         m_worker,
-        "startRecording",
-        Qt::QueuedConnection,
-        Q_ARG(int, deviceIndex),
-        Q_ARG(QString, filePath));
+        [this, filePath]() {
+            m_worker->startRecording(filePath);
+        },
+        Qt::QueuedConnection);
 }
 
 void MainWindow::queueStopRecording()
@@ -101,7 +114,7 @@ void MainWindow::queueDiscardRecording()
 
 void MainWindow::requestRefresh()
 {
-    setStatusText(QStringLiteral("Refreshing playback devices..."));
+    setStatusText(QStringLiteral("Refreshing audio devices..."));
     queueRefreshDevices();
 }
 
@@ -113,13 +126,8 @@ void MainWindow::requestStartRecording()
         return;
     }
 
-    setStatusText(QStringLiteral("Recording speaker output to %1").arg(filePath));
-    queueStartRecording(m_ui->currentDeviceIndex(), filePath);
-}
-
-void MainWindow::requestDeviceSelection(int deviceIndex)
-{
-    queueSelectDevice(deviceIndex);
+    setStatusText(QStringLiteral("Recording audio to %1").arg(filePath));
+    queueStartRecording(filePath);
 }
 
 void MainWindow::requestStopRecording()
@@ -131,10 +139,10 @@ void MainWindow::requestStopRecording()
 void MainWindow::onDevicesReady(const QStringList& deviceNames, int defaultIndex)
 {
     m_ui->setDevices(deviceNames, defaultIndex);
-
-    if (hasDevices()) {
-        queueSelectDevice(m_ui->currentDeviceIndex());
-    }
+    queueConfigureSources(
+        m_ui->selectedDeviceIndices(),
+        m_ui->mutedStates(),
+        m_ui->gainPercents());
 }
 
 void MainWindow::onRecordingStateChanged(bool isRecording)

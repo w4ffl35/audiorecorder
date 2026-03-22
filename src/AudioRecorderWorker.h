@@ -1,10 +1,10 @@
 #pragma once
 
 #include <QObject>
-
 #include <QString>
 #include <QStringList>
 
+class AudioRecorderWorkerState;
 class QTimer;
 
 class AudioRecorderWorker : public QObject
@@ -39,9 +39,8 @@ private:
     bool ensureContext();
     bool startMonitoringDevice(int deviceIndex);
     void uninitializeContext();
-    void publishPeak(float linearPeak);
     void shutdownDevice();
 
     QTimer* m_levelTimer = nullptr;
-    class AudioRecorderWorkerPrivate* m_privateState = nullptr;
+    AudioRecorderWorkerState* m_state = nullptr;
 };

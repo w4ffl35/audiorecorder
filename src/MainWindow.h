@@ -1,15 +1,12 @@
 #pragma once
 
 #include <QMainWindow>
-
 #include <QString>
 #include <QStringList>
+#include <memory>
 
 class AudioRecorderWorker;
-class QLabel;
-class LevelMeterWidget;
-class QComboBox;
-class QPushButton;
+class MainWindowUi;
 class QThread;
 
 class MainWindow : public QMainWindow
@@ -32,14 +29,19 @@ private slots:
     void showError(const QString& message);
 
 private:
+    void connectSignals();
+    void startAudioThread();
+    void stopAudioThread();
+    void queueRefreshDevices();
+    void queueSelectDevice(int deviceIndex);
+    void queueStartRecording(int deviceIndex);
+    void queueStopRecording();
+    void queueSaveRecording(const QString& filePath);
+    void queueDiscardRecording();
     void setStatusText(const QString& text);
+    bool hasDevices() const;
 
     QThread* m_audioThread = nullptr;
     AudioRecorderWorker* m_worker = nullptr;
-    QComboBox* m_deviceCombo = nullptr;
-    QPushButton* m_refreshButton = nullptr;
-    QPushButton* m_recordButton = nullptr;
-    QPushButton* m_stopButton = nullptr;
-    LevelMeterWidget* m_levelMeter = nullptr;
-    QLabel* m_statusLabel = nullptr;
+    std::unique_ptr<MainWindowUi> m_ui;
 };

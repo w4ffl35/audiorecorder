@@ -1,20 +1,18 @@
 #include "LevelMeterWidget.h"
-
 #include <QLinearGradient>
 #include <QPaintEvent>
 #include <QPainter>
-
 #include <algorithm>
 
 LevelMeterWidget::LevelMeterWidget(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumHeight(30);
+    setMinimumHeight(MinimumMeterHeight);
 }
 
 void LevelMeterWidget::setLevelDb(float levelDb)
 {
-    const float clamped = std::clamp(levelDb, -60.0f, 0.0f);
+    const float clamped = std::clamp(levelDb, MinDb, MaxDb);
     if (qFuzzyCompare(m_levelDb, clamped)) {
         return;
     }
@@ -30,13 +28,13 @@ void LevelMeterWidget::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    const QRectF frame = rect().adjusted(1.0, 1.0, -1.0, -1.0);
+    const QRectF frame = rect().adjusted(FrameInset, FrameInset, -FrameInset, -FrameInset);
     painter.setPen(QColor(40, 40, 40));
     painter.setBrush(QColor(20, 20, 20));
-    painter.drawRoundedRect(frame, 8.0, 8.0);
+    painter.drawRoundedRect(frame, FrameRadius, FrameRadius);
 
-    const float normalized = (m_levelDb + 60.0f) / 60.0f;
-    QRectF fill = frame.adjusted(4.0, 4.0, -4.0, -4.0);
+    const float normalized = (m_levelDb - MinDb) / (MaxDb - MinDb);
+    QRectF fill = frame.adjusted(FillInset, FillInset, -FillInset, -FillInset);
     fill.setWidth(fill.width() * std::clamp(normalized, 0.0f, 1.0f));
 
     QLinearGradient gradient(fill.topLeft(), fill.topRight());
@@ -46,9 +44,11 @@ void LevelMeterWidget::paintEvent(QPaintEvent* event)
 
     painter.setPen(Qt::NoPen);
     painter.setBrush(gradient);
-    painter.drawRoundedRect(fill, 6.0, 6.0);
+    painter.drawRoundedRect(fill, FillRadius, FillRadius);
 
     painter.setPen(QColor(235, 235, 235));
-    painter.drawText(frame.adjusted(10.0, 0.0, -10.0, 0.0), Qt::AlignVCenter | Qt::AlignRight,
-                     QStringLiteral("%1 dB").arg(m_levelDb, 0, 'f', 1));
+    painter.drawText(
+        frame.adjusted(TextPadding, 0.0, -TextPadding, 0.0),
+        Qt::AlignVCenter | Qt::AlignRight,
+        QStringLiteral("%1 dB").arg(m_levelDb, 0, 'f', 1));
 }

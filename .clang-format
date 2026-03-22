@@ -1,0 +1,28 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# JetBrains defaults to 4 spaces, not 2
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Column limit in JetBrains is typically 120 (standard Clang is 80)
+ColumnLimit: 120
+
+# Alignment & Braces
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: All
+IndentCaseLabels: true
+
+# Pointer Alignment (JetBrains default is usually right-aligned: int *ptr)
+PointerAlignment: Right
+
+# Access modifiers (public/private) are usually flush with the class
+AccessModifierOffset: -4
+
+# Space after control statements (if, for, while)
+SpaceBeforeParens: ControlStatements
+
+# Don't indent inside namespaces
+NamespaceIndentation: None

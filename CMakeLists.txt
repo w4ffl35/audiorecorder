@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(audiorecorder VERSION 0.1.0 LANGUAGES CXX)
+project(audiorecorder VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_AUTOMOC ON)
 
 include(FetchContent)
 
 FetchContent_Declare(
     miniaudio
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     URL https://github.com/mackron/miniaudio/archive/refs/tags/0.11.23.tar.gz
 )
 FetchContent_MakeAvailable(miniaudio)
@@ -20,18 +20,36 @@ find_package(Threads REQUIRED)
 
 qt_standard_project_setup()
 
+set(AUDIORECORDER_PLATFORM_SOURCE src/AudioRecorderWorkerPlatform_unsupported.cpp)
+
+if(WIN32)
+    set(AUDIORECORDER_PLATFORM_SOURCE src/AudioRecorderWorkerPlatform_windows.cpp)
+elseif(UNIX AND NOT APPLE)
+    set(AUDIORECORDER_PLATFORM_SOURCE src/AudioRecorderWorkerPlatform_linux.cpp)
+endif()
+
 qt_add_executable(audiorecorder
     src/main.cpp
     src/MainWindow.h
+    src/MainWindowUi.h
     src/MainWindow.cpp
+    src/MainWindowUi.cpp
     src/AudioRecorderWorker.h
+    src/AudioRecorderWorkerConfig.h
+    src/AudioRecorderWorkerState.h
     src/AudioRecorderWorker.cpp
+    src/AudioRecorderWorkerPlatform.h
     src/LevelMeterWidget.h
     src/LevelMeterWidget.cpp
     src/WavWriter.h
     src/WavWriter.cpp
+    src/WavWriterPcm.h
+    src/WavWriterPcm.cpp
     src/miniaudio_impl.cpp
+    ${AUDIORECORDER_PLATFORM_SOURCE}
 )
+
+set_target_properties(audiorecorder PROPERTIES AUTOMOC ON)
 
 target_include_directories(audiorecorder PRIVATE ${miniaudio_SOURCE_DIR})
 

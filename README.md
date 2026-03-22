@@ -4,6 +4,8 @@ Qt 6 desktop application for recording speaker or microphone output to a 16-bit 
 
 This code was generated with AI. I wanted a very simple audio recorder for a project and did not like the available options. Its ugly, but it works.
 
+Current release: `v1.0.0`
+
 ## Backends
 
 - Windows: WASAPI loopback via miniaudio.
@@ -19,12 +21,23 @@ This code was generated with AI. I wanted a very simple audio recorder for a pro
 ## Build
 
 ```bash
+bash build.sh
+```
+
+Or
+
+```bash
 cmake -S . -B build
 cmake --build build
 ```
 
+## Releases
+
+- Pushing a tag like `v1.0.0` triggers GitHub Actions to build release artifacts for Linux and Windows.
+- GitHub Actions publishes the built archives to the matching GitHub release.
+
 ## Notes
 
-- The device picker shows playback and recording devices
-- Record writes captured samples to memory immediately
-- Stop ends capture and prompts for a `.wav` output path
+- The device picker shows playback devices only.
+- Record writes captured samples to memory immediately.
+- Stop ends capture and prompts for a `.wav` output path.

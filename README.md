@@ -4,7 +4,7 @@
 [![Release Build](https://github.com/w4ffl35/audiorecorder/actions/workflows/release.yml/badge.svg)](https://github.com/w4ffl35/audiorecorder/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/w4ffl35/audiorecorder)](https://github.com/w4ffl35/audiorecorder/blob/master/LICENSE.md)
 
-![Application screenshot](image.png)
+![alt text](image.png)
 
 Download prebuilt Linux and Windows binaries from [GitHub Releases](https://github.com/w4ffl35/audiorecorder/releases/latest).
 

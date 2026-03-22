@@ -15,7 +15,7 @@ Current release: `v1.0.0`
 
 - CMake 3.21+
 - C++20 compiler
-- Qt 6.5+ with `Core`, `Gui`, and `Widgets`
+- Qt 6.4+ with `Core`, `Gui`, and `Widgets`
 - Internet access during the first configure step so CMake can fetch `miniaudio`
 
 ## Build
